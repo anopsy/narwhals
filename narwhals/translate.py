@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from narwhals.dataframe import DataFrame
     from narwhals.dataframe import LazyFrame
     from narwhals.series import Series
+    from narwhals.typing import DTypes
     from narwhals.typing import IntoDataFrameT
     from narwhals.typing import IntoFrameT
 
@@ -296,7 +297,7 @@ def from_native(
 ) -> Any: ...
 
 
-def from_native(  # noqa: PLR0915
+def from_native(
     native_object: Any,
     *,
     strict: bool = True,
@@ -330,6 +331,29 @@ def from_native(  # noqa: PLR0915
     Returns:
         narwhals.DataFrame or narwhals.LazyFrame or narwhals.Series
     """
+    from narwhals import dtypes
+
+    return _from_native_impl(
+        native_object,
+        strict=strict,
+        eager_only=eager_only,
+        eager_or_interchange_only=eager_or_interchange_only,
+        series_only=series_only,
+        allow_series=allow_series,
+        dtypes=dtypes,  # type: ignore[arg-type]
+    )
+
+
+def _from_native_impl(  # noqa: PLR0915
+    native_object: Any,
+    *,
+    strict: bool = True,
+    eager_only: bool | None = None,
+    eager_or_interchange_only: bool | None = None,
+    series_only: bool | None = None,
+    allow_series: bool | None = None,
+    dtypes: DTypes,
+) -> Any:
     from narwhals._arrow.dataframe import ArrowDataFrame
     from narwhals._arrow.series import ArrowSeries
     from narwhals._dask.dataframe import DaskLazyFrame
@@ -391,9 +415,6 @@ def from_native(  # noqa: PLR0915
             level="full",
         )
 
-    # TODO(marco): write all of these in terms of `is_` rather
-    # than `get_` + walrus
-
     # Polars
     elif is_polars_dataframe(native_object):
         if series_only:
@@ -401,7 +422,11 @@ def from_native(  # noqa: PLR0915
             raise TypeError(msg)
         pl = get_polars()
         return DataFrame(
-            PolarsDataFrame(native_object, backend_version=parse_version(pl.__version__)),
+            PolarsDataFrame(
+                native_object,
+                backend_version=parse_version(pl.__version__),
+                dtypes=dtypes,
+            ),
             level="full",
         )
     elif is_polars_lazyframe(native_object):
@@ -413,7 +438,11 @@ def from_native(  # noqa: PLR0915
             raise TypeError(msg)
         pl = get_polars()
         return LazyFrame(
-            PolarsLazyFrame(native_object, backend_version=parse_version(pl.__version__)),
+            PolarsLazyFrame(
+                native_object,
+                backend_version=parse_version(pl.__version__),
+                dtypes=dtypes,
+            ),
             level="full",
         )
     elif is_polars_series(native_object):
@@ -422,7 +451,11 @@ def from_native(  # noqa: PLR0915
             msg = "Please set `allow_series=True`"
             raise TypeError(msg)
         return Series(
-            PolarsSeries(native_object, backend_version=parse_version(pl.__version__)),
+            PolarsSeries(
+                native_object,
+                backend_version=parse_version(pl.__version__),
+                dtypes=dtypes,
+            ),
             level="full",
         )
 
@@ -437,6 +470,7 @@ def from_native(  # noqa: PLR0915
                 native_object,
                 backend_version=parse_version(pd.__version__),
                 implementation=Implementation.PANDAS,
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -450,6 +484,7 @@ def from_native(  # noqa: PLR0915
                 native_object,
                 implementation=Implementation.PANDAS,
                 backend_version=parse_version(pd.__version__),
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -465,6 +500,7 @@ def from_native(  # noqa: PLR0915
                 native_object,
                 implementation=Implementation.MODIN,
                 backend_version=parse_version(mpd.__version__),
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -478,6 +514,7 @@ def from_native(  # noqa: PLR0915
                 native_object,
                 implementation=Implementation.MODIN,
                 backend_version=parse_version(mpd.__version__),
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -493,6 +530,7 @@ def from_native(  # noqa: PLR0915
                 native_object,
                 implementation=Implementation.CUDF,
                 backend_version=parse_version(cudf.__version__),
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -506,6 +544,7 @@ def from_native(  # noqa: PLR0915
                 native_object,
                 implementation=Implementation.CUDF,
                 backend_version=parse_version(cudf.__version__),
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -517,7 +556,11 @@ def from_native(  # noqa: PLR0915
             msg = "Cannot only use `series_only` with arrow table"
             raise TypeError(msg)
         return DataFrame(
-            ArrowDataFrame(native_object, backend_version=parse_version(pa.__version__)),
+            ArrowDataFrame(
+                native_object,
+                backend_version=parse_version(pa.__version__),
+                dtypes=dtypes,
+            ),
             level="full",
         )
     elif is_pyarrow_chunked_array(native_object):
@@ -527,7 +570,10 @@ def from_native(  # noqa: PLR0915
             raise TypeError(msg)
         return Series(
             ArrowSeries(
-                native_object, backend_version=parse_version(pa.__version__), name=""
+                native_object,
+                backend_version=parse_version(pa.__version__),
+                name="",
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -545,7 +591,9 @@ def from_native(  # noqa: PLR0915
             raise ImportError(msg)
         return LazyFrame(
             DaskLazyFrame(
-                native_object, backend_version=parse_version(get_dask().__version__)
+                native_object,
+                backend_version=parse_version(get_dask().__version__),
+                dtypes=dtypes,
             ),
             level="full",
         )
@@ -559,7 +607,7 @@ def from_native(  # noqa: PLR0915
             )
             raise TypeError(msg)
         return DataFrame(
-            DuckDBInterchangeFrame(native_object),
+            DuckDBInterchangeFrame(native_object, dtypes=dtypes),
             level="interchange",
         )
 
@@ -572,7 +620,7 @@ def from_native(  # noqa: PLR0915
             )
             raise TypeError(msg)
         return DataFrame(
-            IbisInterchangeFrame(native_object),
+            IbisInterchangeFrame(native_object, dtypes=dtypes),
             level="interchange",
         )
 
@@ -585,7 +633,7 @@ def from_native(  # noqa: PLR0915
             )
             raise TypeError(msg)
         return DataFrame(
-            InterchangeFrame(native_object),
+            InterchangeFrame(native_object, dtypes=dtypes),
             level="interchange",
         )
 
@@ -706,7 +754,7 @@ def narwhalify(
 
             backends = {
                 b()
-                for v in [*args, *kwargs.values()]
+                for v in (*args, *kwargs.values())
                 if (b := getattr(v, "__native_namespace__", None))
             }
 
